@@ -14,8 +14,8 @@ import (
 const (
 	DefaultThreadCount int    = 3
 	WikipediaHost      string = "en.wikipedia.org"
-	MaxThreads int = 10
-	MinThreads int = 0
+	MaxThreads         int    = 10
+	MinThreads         int    = 0
 )
 
 type Application struct {

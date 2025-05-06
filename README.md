@@ -48,3 +48,6 @@ Only internal Wikipedia article links are followed—sidebars, references, and o
 Increasing concurrency speeds up crawling, but excessive requests can lead to throttling by Wikipedia.
 
 The tool caps concurrency between 1 and 10 threads for safety.
+
+### 💸 Donate to Wikipedia
+Wikipedia is a wonderful source of information. Please help keep it running and free by [donating](https://donate.wikimedia.org/wiki/Ways_to_Give).

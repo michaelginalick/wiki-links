@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
+	"golang.org/x/exp/slog"
 	"golang.org/x/net/html"
 )
 
@@ -31,13 +33,18 @@ func NewLinkClient(httpClient *http.Client) Client {
 
 func (link *linkClient) ExtractWikiLinks(givenURL, scopedHost string) ([]*url.URL, error) {
 	doc, err := fetchHTLMFromLink(link.httpClient, givenURL)
-	if err != nil {
+	if err != nil || doc == nil {
 		return nil, fmt.Errorf("could not fetch html from link %w", err)
+	}
+
+	baseURL, err := url.Parse(givenURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base URL: %w", err)
 	}
 
 	urls := []*url.URL{}
 	visitNode := func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "a" {
+		if n != nil && n.Type == html.ElementNode && n.Data == "a" {
 			for _, a := range n.Attr {
 
 				if a.Key != "href" {
@@ -45,11 +52,17 @@ func (link *linkClient) ExtractWikiLinks(givenURL, scopedHost string) ([]*url.UR
 				}
 
 				url, err := url.Parse(a.Val)
-				if err != nil || url.Host != scopedHost {
-					continue // ignore bad and non-wikipedia URLs
+				if err != nil {
+					slog.Error("parsing a href tag into url")
+					continue
 				}
 
-				urls = append(urls, url)
+				fullURL := baseURL.ResolveReference(url)
+
+				// ignore bad, non-wikipedia, and urls with a query param
+				if fullURL.Host != "" && fullURL.Host == scopedHost && len(fullURL.RawQuery) == 0 {
+					urls = append(urls, fullURL)
+				}
 			}
 		}
 	}
@@ -59,7 +72,10 @@ func (link *linkClient) ExtractWikiLinks(givenURL, scopedHost string) ([]*url.UR
 }
 
 func fetchHTLMFromLink(client *http.Client, url string) (*html.Node, error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(2)*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

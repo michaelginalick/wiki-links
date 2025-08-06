@@ -1,10 +1,11 @@
 package wikipath
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
+	"sync"
 	"sync/atomic"
 	"wikipaths/links"
 
@@ -28,10 +29,11 @@ type Application struct {
 	ThreadCount int
 	WikiClient  *wikiClient
 	LinkClient  links.Client
+	mu          sync.Mutex
 }
 
 type Client interface {
-	Crawl(url string) []string
+	Crawl(ctx context.Context, url string) []string
 }
 
 type wikiClient struct {
@@ -109,42 +111,84 @@ func New(opts ...Option) (*Application, error) {
 	return app, nil
 }
 
-func (app *Application) Run() {
-	go func() { app.Worklist <- []*url.URL{app.Source} }()
-
-	// Limit active thread count to app.ThreadCount; default is 3
+// Limit active thread count to app.ThreadCount; default is 3
+func (app *Application) startWorkers(wg *sync.WaitGroup, ctx context.Context) {
 	for i := 0; i < app.ThreadCount; i++ {
 		go func() {
 			for link := range app.UnseenLinks {
-				foundLinks := app.Crawl(link)
-				go func() { app.Worklist <- foundLinks }()
+				wg.Add(1)
+				foundLinks := app.Crawl(ctx, link)
+				go func() {
+					defer wg.Done()
+					app.Worklist <- foundLinks
+				}()
 			}
 		}()
 	}
+}
+
+func (app *Application) processWorkList(cancel context.CancelFunc) {
+	appSink := app.Sink.String()
 
 	for list := range app.Worklist {
+		newPage := false
 		for _, url := range list {
 			urlStr := url.String()
-			if !app.SeenLinks[urlStr] {
-				app.SeenLinks[urlStr] = true
-				if urlStr == app.Sink.String() {
-					slog.Info("FOUND THE LINK IN", slog.Uint64("count", app.TotalCount))
-					os.Exit(0)
-				} else {
-					atomic.AddUint64(&app.TotalCount, 1)
-					slog.Info("Count at", slog.Uint64("count", app.TotalCount))
-					app.UnseenLinks <- url
-				}
+			seen := app.seen(urlStr)
+			if seen {
+				continue
 			}
+
+			if urlStr == appSink {
+				slog.Info("FOUND THE LINK IN", slog.Uint64("count", app.TotalCount))
+				cancel()
+				return
+			}
+			app.UnseenLinks <- url
+			newPage = true
+		}
+
+		if newPage {
+			atomic.AddUint64(&app.TotalCount, 1)
+			slog.Info("Count at", slog.Uint64("count", app.TotalCount))
 		}
 	}
 }
 
-func (app *Application) Crawl(url *url.URL) []*url.URL {
+func (app *Application) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { app.Worklist <- []*url.URL{app.Source} }()
+	// start workers
+	app.startWorkers(&wg, ctx)
+	// process found links
+	app.processWorkList(cancel)
+
+	go func() {
+		wg.Wait()
+		close(app.UnseenLinks)
+		close(app.Worklist)
+	}()
+}
+
+func (app *Application) Crawl(ctx context.Context, url *url.URL) []*url.URL {
 	slog.Info("Crawling", slog.String("url", url.String()))
 	list, err := app.LinkClient.ExtractWikiLinks(url.String(), WikipediaHost)
 	if err != nil {
-		slog.Error("error parsing link", err)
+		slog.Error("error parsing link", err.Error())
 	}
 	return list
+}
+
+func (app *Application) seen(urlStr string) bool {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+
+	if app.SeenLinks[urlStr] {
+		return true
+	}
+	app.SeenLinks[urlStr] = true
+	return false
 }

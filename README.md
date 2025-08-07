@@ -29,7 +29,7 @@ By following links in the body of Wikipedia articles, it attempts to find a path
 
 ```bash
 git clone https://github.com/michaelginalick/wiki-links.git
-cd wikipath
+cd wikipath/cmd
 go build -o main
 ```
 ### ▶️ Run It

@@ -29,7 +29,7 @@ type Application struct {
 	ThreadCount int
 	WikiClient  *wikiClient
 	LinkClient  links.Client
-	mu          sync.Mutex
+	sync.Mutex
 }
 
 type Client interface {
@@ -120,7 +120,11 @@ func (app *Application) startWorkers(wg *sync.WaitGroup, ctx context.Context) {
 				foundLinks := app.Crawl(ctx, link)
 				go func() {
 					defer wg.Done()
-					app.Worklist <- foundLinks
+					select {
+					case <-ctx.Done():
+						return
+					case app.Worklist <- foundLinks:
+					}
 				}()
 			}
 		}()
@@ -183,8 +187,8 @@ func (app *Application) Crawl(ctx context.Context, url *url.URL) []*url.URL {
 }
 
 func (app *Application) seen(urlStr string) bool {
-	app.mu.Lock()
-	defer app.mu.Unlock()
+	app.Lock()
+	defer app.Unlock()
 
 	if app.SeenLinks[urlStr] {
 		return true

@@ -16,7 +16,7 @@ const (
 	DefaultThreadCount int    = 3
 	WikipediaHost      string = "en.wikipedia.org"
 	MaxThreads         int    = 10
-	MinThreads         int    = 0
+	MinThreads         int    = 1
 )
 
 type Application struct {
@@ -80,7 +80,7 @@ func WithSinkLink(link string) func(*Application) error {
 
 func WithThreadCount(num int) func(*Application) error {
 	return func(app *Application) error {
-		if num > MaxThreads || num <= MinThreads {
+		if num > MaxThreads || num < MinThreads {
 			return fmt.Errorf("thread count must be between %d and %d", MinThreads, MaxThreads)
 		}
 		app.ThreadCount = num
@@ -112,7 +112,7 @@ func New(opts ...Option) (*Application, error) {
 }
 
 // Limit active thread count to app.ThreadCount; default is 3
-func (app *Application) startWorkers(wg *sync.WaitGroup, ctx context.Context) {
+func (app *Application) startWorkers(ctx context.Context, wg *sync.WaitGroup) {
 	for i := 0; i < app.ThreadCount; i++ {
 		go func() {
 			for link := range app.UnseenLinks {
@@ -166,7 +166,7 @@ func (app *Application) Run() {
 	wg.Add(1)
 	go func() { app.Worklist <- []*url.URL{app.Source} }()
 	// start workers
-	app.startWorkers(&wg, ctx)
+	app.startWorkers(ctx, &wg)
 	// process found links
 	app.processWorkList(cancel)
 

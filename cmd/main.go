@@ -4,13 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	wikipath "wikipaths/wikipaths"
+	wikipath "wikipaths/pkg/wikipaths"
 )
 
 func main() {
 	source := flag.String("source", "https://en.wikipedia.org/wiki/Knowledge", "starting link")
 	sink := flag.String("sink", "https://en.wikipedia.org/wiki/Philosophy", "ending link")
-	threadCount := flag.Int("concurrency", 3, "number of active threads. Max 10 min 1")
+	threadCount := flag.Int("concurrency", 3, "number of active threads. Max 10, min 1")
 
 	flag.Parse()
 	app, err := wikipath.New(wikipath.WithSourceLink(*source),

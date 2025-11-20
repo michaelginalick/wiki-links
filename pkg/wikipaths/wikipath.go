@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"sync"
 	"sync/atomic"
-	"wikipaths/links"
+	"wikipaths/pkg/links"
 
 	"golang.org/x/exp/slog"
 )

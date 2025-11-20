@@ -1,4 +1,4 @@
-# 🧭 WikiPath
+# WikiPath
 
 **WikiPath** is a simple, concurrent command-line tool written in Go that calculates the link distance between two Wikipedia pages. It crawls Wikipedia pages by following internal links until it finds the target page.
 
